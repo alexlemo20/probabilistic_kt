@@ -1,3 +1,5 @@
+import sys
+sys.path.append("/content/probabilistic_kt")
 import torch
 from torch.autograd import Variable
 import torch.optim as optim
@@ -5,6 +7,16 @@ from tqdm import tqdm
 import numpy as np
 import matplotlib
 from matplotlib.pylab import plt
+from nn.retrieval_evaluation import evaluate_model_retrieval
+from models.cifar_tiny import Cifar_Tiny
+import pickle
+from nn.nn_utils import load_model
+from exp_cifar.cifar_dataset import cifar10_loader
+from nn.retrieval_evaluation import retrieval_evaluation, Database
+from nn.nn_utils import get_labels, extract_features, get_raw_features
+
+
+
 
 def knowledge_transfer(net, net_to_distill, transfer_loader, epochs=1, lr=0.0001, typical_mask=1, typical_step=0, atypical_mask=1, atypical_step=0, atypical_proportion=0, supervised_weight=0):
     """
@@ -20,6 +32,7 @@ def knowledge_transfer(net, net_to_distill, transfer_loader, epochs=1, lr=0.0001
     #typical_losses = list()
     #atypical_losses = list()
     #overall_losses = list()
+    precisions = list()
 
     #step = 1 / epochs
     #par_step = 0
@@ -72,21 +85,25 @@ def knowledge_transfer(net, net_to_distill, transfer_loader, epochs=1, lr=0.0001
         #typical_losses.append(typical_loss)
         #atypical_losses.append(atypical_loss)
         #overall_losses.append(train_loss)
+
+        #net_name = 'cifar_tiny'
+        #donor_name = 'resnet18_cifar10'
+        #transfer_name = 'cifar10'
+        #output_path = 'models/' + net_name + '_' + donor_name + '_kt_' + transfer_name + '.model'
+        #path=output_path
+        #net=Cifar_Tiny(num_classes=10)
+        #dataset_loader=cifar10_loader
+        #if path != '':
+        #  net.cuda()
+        #  load_model(net, path)
+        #_, test_loader, train_loader = dataset_loader(batch_size=128)
+        #res = retrieval_evaluation(net, train_loader, test_loader)
+        #precisions.append(100 * res['map'])
+        #print("\n Precision: ", 100 * res['map'])
+        
+    #show_results(typical_losses, atypical_losses, overall_losses, epochs)
+
     
-    # Plot losses
-    #plt.plot(range(epochs), typical_losses, label='Typical Loss')
-    #plt.plot(range(epochs), atypical_losses, label='Atypical Loss')
-    #plt.plot(range(epochs), overall_losses, label='Overall Loss')
-    #plt.title('Typical, Atypical and Overall Losses')
-    #plt.xlabel('Epochs')
-    #plt.ylabel('Loss')
-    # Display the plot
-    #plt.legend(loc='best')
-    #plt.show()
-    #plt.savefig('my_plot.png')
-
-
-
 def knowledge_transfer_handcrafted(net, transfer_loader, epochs=1, lr=0.0001, supervised_weight=0, typical_mask=1, typical_step=0, atypical_mask=1, atypical_step=0, atypical_proportion=0):
     optimizer = optim.Adam(params=net.parameters(), lr=lr)
     #typical_mask = 1
@@ -98,10 +115,15 @@ def knowledge_transfer_handcrafted(net, transfer_loader, epochs=1, lr=0.0001, su
     #typical_step = (typical_target - typical_mask)/epochs
     #atypical_step = (atypical_target - atypical_mask)/epochs
 
+
+    #typical_losses = list()
+    #atypical_losses = list()
+    #overall_losses = list()
     for epoch in range(epochs):
 
         net.train()
-
+        #typ_loss = 0
+        #atyp_loss = 0
         train_loss = 0
         counter = 1
         for (inputs, features, targets) in tqdm(transfer_loader):
@@ -119,18 +141,29 @@ def knowledge_transfer_handcrafted(net, transfer_loader, epochs=1, lr=0.0001, su
             #       supervised_weight * supervised_loss(outputs_net, targets)
             loss = cosine_similarity_loss(outputs_net, output_target, targets, typical_mask, atypical_mask, atypical_proportion) + \
                    supervised_weight * supervised_loss(outputs_net, targets)
+            #loss, typ_loss, aty_loss = cosine_similarity_loss(outputs_net, output_target, targets, typical_mask, atypical_mask, atypical_proportion) + \
+            #       supervised_weight * supervised_loss(outputs_net, targets)
 
             loss.backward()
             optimizer.step()
 
+            #typical_loss += typ_loss.cpu().data.item()
+            #atypical_loss += atyp_loss.cpu().data.item()
             train_loss += loss.cpu().data.item()
             counter += 1
         
         typical_mask += typical_step
         atypical_mask += atypical_step
-        
+        #typical_loss /= float(counter)
+        #atypical_loss /= float(counter)
+        #print("Typical loss = ",typical_loss," Atypical loss = ", atypical_loss)
         train_loss = train_loss / float(counter)
         print("\n Epoch = ", epoch, " Loss  = ", train_loss)
+        #typical_losses.append(typical_loss)
+        #atypical_losses.append(atypical_loss)
+        #overall_losses.append(train_loss)
+
+    #show_results(typical_losses, atypical_losses, overall_losses, epochs)
 
 
 def cosine_similarity_loss(output_net, target_net, targets, typical_mask, atypical_mask, atypical_proportion, step=0,  eps=0.0000001):
@@ -155,6 +188,7 @@ def cosine_similarity_loss(output_net, target_net, targets, typical_mask, atypic
     # Transform them into probabilities
     model_similarity = model_similarity / torch.sum(model_similarity, dim=1, keepdim=True)
     target_similarity = target_similarity / torch.sum(target_similarity, dim=1, keepdim=True)
+    
     # Calculate the KL-divergence    
     #loss = torch.mean(target_similarity * torch.log((target_similarity + eps) / (model_similarity + eps)))
     
@@ -166,9 +200,50 @@ def cosine_similarity_loss(output_net, target_net, targets, typical_mask, atypic
       cosine_similarity = target_similarity #teacher
 
     # choose to shape a symmetric matrix
-    #cosine_similarity = cosine_similarity + torch.transpose(cosine_similarity, 0, 1) / 2
+    cosine_similarity = (cosine_similarity + torch.transpose(cosine_similarity, 0, 1)) / 2
     labels = targets.cpu().numpy()
 
+    typical_similarities = calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypical_proportion)
+    #typical_similarities, typical_loss, atypical_loss = calculate_mask(cosine_similarity, labels)
+
+    loss = torch.mean(target_similarity * torch.log((target_similarity + eps) / (model_similarity + eps)) * typical_similarities)
+    return loss
+    #return loss, typical_loss, atypical_loss 
+
+
+def supervised_loss(output_net, targets, eps=0.0000001):
+    labels = targets.cpu().numpy()
+    target_sim = np.zeros((labels.shape[0], labels.shape[0]), dtype='float32')
+    for i in range(labels.shape[0]):
+        for j in range(labels.shape[0]):
+            if labels[i] == labels[j]:
+                target_sim[i, j] = 1.0
+            else:
+                target_sim[i, j] = 0
+
+    target_similarity = torch.from_numpy(target_sim).cuda()
+    target_similarity = Variable(target_similarity)
+
+    # Normalize each vector by its norm
+    output_net_norm = torch.sqrt(torch.sum(output_net ** 2, dim=1, keepdim=True))
+    output_net = output_net / (output_net_norm + eps)
+    output_net[output_net != output_net] = 0
+
+    # Calculate the cosine similarity
+    model_similarity = torch.mm(output_net, output_net.transpose(0, 1))
+    # Scale cosine similarity to 0..1
+    model_similarity = (model_similarity + 1.0) / 2.0
+
+    # Transform them into probabilities
+    model_similarity = model_similarity / torch.sum(model_similarity, dim=1, keepdim=True)
+    target_similarity = target_similarity / torch.sum(target_similarity, dim=1, keepdim=True)
+
+    # Calculate the KL-divergence
+    loss = torch.mean(target_similarity * torch.log((target_similarity + eps) / (model_similarity + eps)))
+
+    return loss
+
+def calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypical_proportion):
     intra_similarities = {}
     inter_similarities = {}
 
@@ -209,7 +284,7 @@ def cosine_similarity_loss(output_net, target_net, targets, typical_mask, atypic
       x, y = coordinates.split(' ')
       typical_similarities[int(x)][int(y)] = atypical_mask # atypical_mask
       # comment out if not to shape a symmetric mask matrix
-      #typical_similarities[int(y)][int(x)] = atypical_mask
+      typical_similarities[int(y)][int(x)] = atypical_mask
       
       #typical_loss_matrix[int(x)][int(y)] = 0
       #typical_loss_matrix[int(y)][int(x)] = 0
@@ -271,41 +346,19 @@ def cosine_similarity_loss(output_net, target_net, targets, typical_mask, atypic
     #  x, y = coordinates.split(' ')
     #  typical_similarities[int(x)][int(y)] = (abs(((max_inter - inter_sorted[coordinates]) / max_dis_inter) - step) / 2) + 0.5
     #  typical_similarities[int(y)][int(x)] = (abs(((max_inter - inter_sorted[coordinates]) / max_dis_inter) - step) / 2) + 0.5
-
     
-    loss = torch.mean(target_similarity * torch.log((target_similarity + eps) / (model_similarity + eps)) * typical_similarities)
-    return loss
-    #return loss, typical_loss, atypical_loss 
+    return typical_similarities
+    #return typical_similarities, typical_loss, atypical_loss
 
-
-def supervised_loss(output_net, targets, eps=0.0000001):
-    labels = targets.cpu().numpy()
-    target_sim = np.zeros((labels.shape[0], labels.shape[0]), dtype='float32')
-    for i in range(labels.shape[0]):
-        for j in range(labels.shape[0]):
-            if labels[i] == labels[j]:
-                target_sim[i, j] = 1.0
-            else:
-                target_sim[i, j] = 0
-
-    target_similarity = torch.from_numpy(target_sim).cuda()
-    target_similarity = Variable(target_similarity)
-
-    # Normalize each vector by its norm
-    output_net_norm = torch.sqrt(torch.sum(output_net ** 2, dim=1, keepdim=True))
-    output_net = output_net / (output_net_norm + eps)
-    output_net[output_net != output_net] = 0
-
-    # Calculate the cosine similarity
-    model_similarity = torch.mm(output_net, output_net.transpose(0, 1))
-    # Scale cosine similarity to 0..1
-    model_similarity = (model_similarity + 1.0) / 2.0
-
-    # Transform them into probabilities
-    model_similarity = model_similarity / torch.sum(model_similarity, dim=1, keepdim=True)
-    target_similarity = target_similarity / torch.sum(target_similarity, dim=1, keepdim=True)
-
-    # Calculate the KL-divergence
-    loss = torch.mean(target_similarity * torch.log((target_similarity + eps) / (model_similarity + eps)))
-
-    return loss
+def show_results(typical_losses, atypical_losses, overall_losses, epochs):
+    #Plot losses
+    plt.plot(range(epochs), typical_losses, label='Typical Loss')
+    plt.plot(range(epochs), atypical_losses, label='Atypical Loss')
+    plt.plot(range(epochs), overall_losses, label='Overall Loss')
+    plt.title('Typical, Atypical and Overall Losses')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    # Display the plot
+    plt.legend(loc='best')
+    plt.show()
+    plt.savefig('losses.png')
