@@ -1,3 +1,7 @@
+import sys
+sys.path.append("/media/data/alexlemo/probabilistic_kt")
+# pip install --force-reinstall torch==1.12.1+cu113 --extra-index-url https://download.pytorch.org/whl/
+
 import torch.nn as nn
 import torch.optim as optim
 from nn.retrieval_evaluation import evaluate_model_retrieval

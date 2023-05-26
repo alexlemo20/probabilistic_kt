@@ -1,5 +1,7 @@
 import sys
-sys.path.append("/content/probabilistic_kt")
+sys.path.append("/media/data/alexlemo/probabilistic_kt")
+# pip install --force-reinstall torch==1.12.1+cu113 --extra-index-url https://download.pytorch.org/whl/
+
 from nn.nn_utils import load_model, save_model
 from nn.distillation import unsupervised_distillation
 from nn.pkt import knowledge_transfer
@@ -17,7 +19,7 @@ def perform_transfer_knowledge(net, donor_net, transfer_loader, output_path, tra
     donor_net.cuda()
     typical_mask = 1
     atypical_mask = 0
-    typical_target = 2
+    typical_target = 1
     atypical_target = 1
     atypical_proportion = 0.2
 
@@ -46,7 +48,7 @@ def perform_transfer_knowledge(net, donor_net, transfer_loader, output_path, tra
 
 def evaluate_kt_methods(net_creator, donor_creator, donor_path, transfer_loader, batch_size=128,
                         donor_name='very_small_cifar10', net_name='tiny_cifar', transfer_name='cifar10',
-                        iters=50, init_model_path=None):
+                        iters=100, init_model_path=None):
     # Method 1: HINT transfer
     #net = net_creator()
     #if init_model_path is not None:
@@ -111,6 +113,6 @@ def evaluate_kt_methods(net_creator, donor_creator, donor_path, transfer_loader,
 if __name__ == '__main__':
     evaluate_kt_methods(lambda: Cifar_Tiny(10), lambda: ResNet18(num_classes=10), 'models/resnet18_cifar10.model',
                         cifar10_loader, batch_size=128, donor_name='resnet18_cifar10', transfer_name='cifar10',
-                        iters=20, net_name='cifar_tiny', init_model_path='models/tiny_cifar10.model')
+                        iters=100, net_name='cifar_tiny', init_model_path='models/tiny_cifar10.model')
 
 
