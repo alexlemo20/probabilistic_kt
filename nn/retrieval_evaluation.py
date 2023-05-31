@@ -4,7 +4,7 @@ from time import time
 from nn.nn_utils import get_labels, extract_features, get_raw_features
 import numpy as np
 import pickle
-from exp_cifar.cifar_dataset import cifar10_loader
+from exp_cifar.cifar_dataset import cifar10_loader, cifar100_loader
 from nn.nn_utils import load_model
 
 

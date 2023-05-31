@@ -11,7 +11,7 @@ from nn.retrieval_evaluation import evaluate_model_retrieval
 from models.cifar_tiny import Cifar_Tiny
 import pickle
 from nn.nn_utils import load_model
-from exp_cifar.cifar_dataset import cifar10_loader
+from exp_cifar.cifar_dataset import cifar10_loader, cifar100_loader
 from nn.retrieval_evaluation import retrieval_evaluation, Database
 from nn.nn_utils import get_labels, extract_features, get_raw_features
 from exp_yf.yt_dataset import get_yt_loaders
@@ -52,8 +52,9 @@ def knowledge_transfer(net, net_to_distill, transfer_loader, epochs=1, lr=0.0001
 			optimizer.zero_grad()
 
 			# # Get the data
-			output_target = net_to_distill.get_features(Variable(inputs))
-			outputs_net = net.get_features(Variable(inputs))
+			with torch.no_grad():
+				output_target = net_to_distill.get_features(Variable(inputs))
+				outputs_net = net.get_features(Variable(inputs))
 
 			# Get the loss
 			if supervised_weight > 0:
@@ -66,7 +67,8 @@ def knowledge_transfer(net, net_to_distill, transfer_loader, epochs=1, lr=0.0001
 
 			typical_loss += typ_loss.cpu().data.item()
 			atypical_loss += atyp_loss.cpu().data.item()
-
+			
+			loss.requires_grad = True
 			loss.backward()
 			optimizer.step()
 
@@ -278,61 +280,61 @@ def calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypi
 
 
 	# 1st method
-	#atypical = atypical_intra + atypical_inter
+	atypical = atypical_intra + atypical_inter
 	#   atypical_loss = 0
-	#for coordinates in atypical:
-	#	x, y = coordinates.split(' ')
-	#	typical_similarities[int(x)][int(y)] = atypical_mask # atypical_mask
+	for coordinates in atypical:
+		x, y = coordinates.split(' ')
+		typical_similarities[int(x)][int(y)] = atypical_mask # atypical_mask
 		# comment out if not to shape a symmetric mask matrix
-	#	typical_similarities[int(y)][int(x)] = atypical_mask
+		typical_similarities[int(y)][int(x)] = atypical_mask
 
-	#	typical_loss_matrix[int(x)][int(y)] = 0
-	#	typical_loss_matrix[int(y)][int(x)] = 0
-	#	atypical_loss_matrix[int(x)][int(y)] = 1 # S.O.S.
-	#	atypical_loss_matrix[int(y)][int(x)] = 1
+		typical_loss_matrix[int(x)][int(y)] = 0
+		typical_loss_matrix[int(y)][int(x)] = 0
+		atypical_loss_matrix[int(x)][int(y)] = 1 # S.O.S.
+		atypical_loss_matrix[int(y)][int(x)] = 1
 		
 
 
 	# 2nd method 
-	typical_intra = list(intra_sorted.keys())[-(len(intra_sorted)-atypical_size_intra):]
-	typical_inter = list(inter_sorted.keys())[-(len(inter_sorted)-atypical_size_inter):]
+	#typical_intra = list(intra_sorted.keys())[-(len(intra_sorted)-atypical_size_intra):]
+	#typical_inter = list(inter_sorted.keys())[-(len(inter_sorted)-atypical_size_inter):]
 
-	mean_intra = torch.mean(torch.tensor(list(intra_sorted.values())))
-	max_dist_intra = max(abs(list(intra_sorted.values())[0]-mean_intra), abs(list(intra_sorted.values())[-1]-mean_intra)) # first & last element
-	mean_inter = torch.mean(torch.tensor(list(inter_sorted.values())))
-	max_dist_inter = max(abs(list(inter_sorted.values())[0]-mean_inter), abs(list(inter_sorted.values())[-1]-mean_inter)) # first & last element
+	#mean_intra = torch.mean(torch.tensor(list(intra_sorted.values())))
+	#max_dist_intra = max(abs(list(intra_sorted.values())[0]-mean_intra), abs(list(intra_sorted.values())[-1]-mean_intra)) # first & last element
+	#mean_inter = torch.mean(torch.tensor(list(inter_sorted.values())))
+	#max_dist_inter = max(abs(list(inter_sorted.values())[0]-mean_inter), abs(list(inter_sorted.values())[-1]-mean_inter)) # first & last element
 
-	typical_similarities = torch.cuda.FloatTensor(cosine_similarity.shape[0], cosine_similarity.shape[1]).fill_(1)
+	#typical_similarities = torch.cuda.FloatTensor(cosine_similarity.shape[0], cosine_similarity.shape[1]).fill_(1)
 
-	for coordinates in atypical_intra:
-		x, y = coordinates.split(' ')
-		typical_similarities[int(x)][int(y)] = ((abs(intra_sorted[coordinates] - mean_intra) / max_dist_intra) + 0.5) * atypical_mask
-		typical_similarities[int(y)][int(x)] = ((abs(intra_sorted[coordinates] - mean_intra) / max_dist_intra) + 0.5) * atypical_mask
+	#for coordinates in atypical_intra:
+	#	x, y = coordinates.split(' ')
+	#	typical_similarities[int(x)][int(y)] = ((abs(intra_sorted[coordinates] - mean_intra) / max_dist_intra) + 0.5) * atypical_mask
+	#	typical_similarities[int(y)][int(x)] = ((abs(intra_sorted[coordinates] - mean_intra) / max_dist_intra) + 0.5) * atypical_mask
 		
-		typical_loss_matrix[int(x)][int(y)] = 0
-		typical_loss_matrix[int(y)][int(x)] = 0
-		atypical_loss_matrix[int(x)][int(y)] = 1
-		atypical_loss_matrix[int(y)][int(x)] = 1
+	#	typical_loss_matrix[int(x)][int(y)] = 0
+	#	typical_loss_matrix[int(y)][int(x)] = 0
+	#	atypical_loss_matrix[int(x)][int(y)] = 1
+	#	atypical_loss_matrix[int(y)][int(x)] = 1
 
-	for coordinates in atypical_inter:
-		x, y = coordinates.split(' ')
-		typical_similarities[int(x)][int(y)] = ((abs(inter_sorted[coordinates] - mean_inter) / max_dist_inter)  + 0.5) * atypical_mask
-		typical_similarities[int(y)][int(x)] = ((abs(inter_sorted[coordinates] - mean_inter) / max_dist_inter)  + 0.5) * atypical_mask
+	#for coordinates in atypical_inter:
+	#	x, y = coordinates.split(' ')
+	#	typical_similarities[int(x)][int(y)] = ((abs(inter_sorted[coordinates] - mean_inter) / max_dist_inter)  + 0.5) * atypical_mask
+	#	typical_similarities[int(y)][int(x)] = ((abs(inter_sorted[coordinates] - mean_inter) / max_dist_inter)  + 0.5) * atypical_mask
 		
-		typical_loss_matrix[int(x)][int(y)] = 0
-		typical_loss_matrix[int(y)][int(x)] = 0
-		atypical_loss_matrix[int(x)][int(y)] = 1
-		atypical_loss_matrix[int(y)][int(x)] = 1
+	#	typical_loss_matrix[int(x)][int(y)] = 0
+	#	typical_loss_matrix[int(y)][int(x)] = 0
+	#	atypical_loss_matrix[int(x)][int(y)] = 1
+	#	atypical_loss_matrix[int(y)][int(x)] = 1
 
-	for coordinates in typical_intra:
-		x, y = coordinates.split(' ')
-		typical_similarities[int(x)][int(y)] = ((abs(intra_sorted[coordinates] - mean_intra) / max_dist_intra) + 0.5) * typical_mask
-		typical_similarities[int(y)][int(x)] = ((abs(intra_sorted[coordinates] - mean_intra) / max_dist_intra) + 0.5) * typical_mask
+	#for coordinates in typical_intra:
+	#	x, y = coordinates.split(' ')
+	#	typical_similarities[int(x)][int(y)] = ((abs(intra_sorted[coordinates] - mean_intra) / max_dist_intra) + 0.5) * typical_mask
+	#	typical_similarities[int(y)][int(x)] = ((abs(intra_sorted[coordinates] - mean_intra) / max_dist_intra) + 0.5) * typical_mask
 
-	for coordinates in atypical_inter:
-		x, y = coordinates.split(' ')
-		typical_similarities[int(x)][int(y)] = ((abs(inter_sorted[coordinates] - mean_inter) / max_dist_inter)  + 0.5) * typical_mask
-		typical_similarities[int(y)][int(x)] = ((abs(inter_sorted[coordinates] - mean_inter) / max_dist_inter)  + 0.5) * typical_mask
+	#for coordinates in atypical_inter:
+	#	x, y = coordinates.split(' ')
+	#	typical_similarities[int(x)][int(y)] = ((abs(inter_sorted[coordinates] - mean_inter) / max_dist_inter)  + 0.5) * typical_mask
+	#	typical_similarities[int(y)][int(x)] = ((abs(inter_sorted[coordinates] - mean_inter) / max_dist_inter)  + 0.5) * typical_mask
 
 
 

@@ -5,7 +5,7 @@ sys.path.append("/media/data/alexlemo/probabilistic_kt")
 from nn.nn_utils import load_model, save_model
 from nn.distillation import unsupervised_distillation
 from nn.pkt import knowledge_transfer
-from exp_cifar.cifar_dataset import cifar10_loader
+from exp_cifar.cifar_dataset import cifar10_loader, cifar100_loader
 from models.cifar_tiny import Cifar_Tiny
 from models.resnet import ResNet18
 from nn.hint_transfer import unsupervised_hint_transfer, unsupervised_hint_transfer_optimized
@@ -18,10 +18,10 @@ def perform_transfer_knowledge(net, donor_net, transfer_loader, output_path, tra
     net.cuda()
     donor_net.cuda()
     typical_mask = 1
-    atypical_mask = 0
+    atypical_mask = 1
     typical_target = 1
     atypical_target = 1
-    atypical_proportion = 0.2
+    atypical_proportion = 0
 
     typical_step = (typical_target - typical_mask) / iters[0]
     atypical_step = (atypical_target - atypical_mask) / iters[0]
@@ -92,7 +92,7 @@ def evaluate_kt_methods(net_creator, donor_creator, donor_path, transfer_loader,
     results_path = 'results/' + net_name + '_' + donor_name + '_kt_' + transfer_name + '.pickle'
     perform_transfer_knowledge(net, donor_net, transfer_loader=train_loader, transfer_method='pkt',
                                output_path=output_path, iters=[iters], learning_rates=[0.0001])
-    evaluate_model_retrieval(net=Cifar_Tiny(num_classes=10), path=output_path, result_path=results_path)
+    evaluate_model_retrieval(net=Cifar_Tiny(num_classes=100), path=output_path, result_path=results_path, dataset_name='cifar100', dataset_loader=cifar100_loader)
 
 
     # Method 4: HINT (optimized) transfer
@@ -111,8 +111,8 @@ def evaluate_kt_methods(net_creator, donor_creator, donor_path, transfer_loader,
     #evaluate_model_retrieval(net=Cifar_Tiny(num_classes=10), path=output_path, result_path=results_path)
 
 if __name__ == '__main__':
-    evaluate_kt_methods(lambda: Cifar_Tiny(10), lambda: ResNet18(num_classes=10), 'models/resnet18_cifar10.model',
-                        cifar10_loader, batch_size=128, donor_name='resnet18_cifar10', transfer_name='cifar10',
-                        iters=100, net_name='cifar_tiny', init_model_path='models/tiny_cifar10.model')
+    evaluate_kt_methods(lambda: Cifar_Tiny(100), lambda: ResNet18(num_classes=100), 'models/resnet18_cifar100.model',
+                        cifar100_loader, batch_size=128, donor_name='resnet18_cifar100', transfer_name='cifar100',
+                        iters=20, net_name='cifar_tiny', init_model_path='models/tiny_cifar100.model')
 
 
