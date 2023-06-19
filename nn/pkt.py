@@ -18,7 +18,8 @@ from exp_yf.yt_dataset import get_yt_loaders
 
 
 
-def knowledge_transfer(net, net_to_distill, transfer_loader, epochs=1, lr=0.0001, typical_mask=1, typical_step=0, atypical_mask=1, atypical_step=0, atypical_proportion=0, supervised_weight=0):
+#def knowledge_transfer(net, net_to_distill, transfer_loader, epochs=1, lr=0.0001, typical_mask=1, typical_step=0, atypical_mask=1, atypical_step=0, atypical_proportion=0, alpha=1, beta=1, supervised_weight=0):
+def knowledge_transfer(net, net_to_distill, transfer_loader, epochs=1, lr=0.0001, typ_atyp_ratio=1, step_ratio=0, atypical_proportion=0, alpha=1, beta=1,test_loader=None, database_loader=None, supervised_weight=0):
 	"""
 	Performs unsupervised neural network knowledge transfer
 	:param net:
@@ -33,28 +34,29 @@ def knowledge_transfer(net, net_to_distill, transfer_loader, epochs=1, lr=0.0001
 	atypical_losses = list()
 	overall_losses = list()
 	precisions = list()
-	dataset_loader=cifar10_loader
-	_, test_loader, train_loader = dataset_loader(batch_size=128)
+	#_, test_loader, train_loader = get_yt_loaders(batch_size=16, feature_type='transfer', seed=1) #128
 	#step = 1 / epochs
 	#par_step = 0
 	for epoch in range(epochs):
-
+		atypical_mask = 1
+		typical_mask = typ_atyp_ratio * atypical_mask
+		#print(typical_mask)
 		net.train()
 		net_to_distill.eval()
 		typical_loss = 0
 		atypical_loss = 0
 		train_loss = 0
 		counter = 1
-		for (inputs, targets) in tqdm(transfer_loader):
+		for (inputs, _, targets) in tqdm(transfer_loader):#inputs, targets
 			inputs, targets = inputs.cuda(), targets.cuda()
 
 			# Feed forward the network and update
 			optimizer.zero_grad()
 
 			# # Get the data
-			with torch.no_grad():
-				output_target = net_to_distill.get_features(Variable(inputs))
-				outputs_net = net.get_features(Variable(inputs))
+
+			output_target = net_to_distill.get_features(Variable(inputs))
+			outputs_net = net.get_features(Variable(inputs))
 
 			# Get the loss
 			if supervised_weight > 0:
@@ -62,21 +64,23 @@ def knowledge_transfer(net, net_to_distill, transfer_loader, epochs=1, lr=0.0001
 				       supervised_weight * supervised_loss(outputs_net, targets)
 			else:
 				#loss = cosine_similarity_loss(outputs_net, output_target)
-				loss, typ_loss, atyp_loss = cosine_similarity_loss(outputs_net, output_target, targets, typical_mask, atypical_mask, atypical_proportion)
+				loss, typ_loss, atyp_loss = cosine_similarity_loss(outputs_net, output_target, targets, typical_mask, atypical_mask, atypical_proportion, alpha, beta)
 				#loss = cosine_similarity_loss(outputs_net, output_target, targets, typical_mask, atypical_mask, atypical_proportion, par_step) # par_step
 
 			typical_loss += typ_loss.cpu().data.item()
 			atypical_loss += atyp_loss.cpu().data.item()
 			
-			loss.requires_grad = True
+			#loss.requires_grad = True
 			loss.backward()
 			optimizer.step()
 
 			train_loss += loss.cpu().data.item()
 			counter += 1
-
-		typical_mask += typical_step
-		atypical_mask += atypical_step
+		
+		#if (epoch < epochs/2):
+		#	typical_mask += typical_step
+		#	atypical_mask += atypical_step
+		typ_atyp_ratio += step_ratio
 		#par_step += step
 
 		typical_loss /= float(counter)
@@ -90,7 +94,7 @@ def knowledge_transfer(net, net_to_distill, transfer_loader, epochs=1, lr=0.0001
 		overall_losses.append(train_loss)
 
 
-		results = retrieval_evaluation(net, train_loader, test_loader)
+		results = retrieval_evaluation(net, database_loader, test_loader)
 		precisions.append(100 * results['map'])
 		print("\n Precision: ", 100 * results['map'])
 	print("\n The precisions as a list are: ",precisions)
@@ -167,7 +171,7 @@ def knowledge_transfer_handcrafted(net, transfer_loader, epochs=1, lr=0.0001, su
 	show_results(typical_losses, atypical_losses, overall_losses, precisions, epochs)
 
 
-def cosine_similarity_loss(output_net, target_net, targets, typical_mask, atypical_mask, atypical_proportion, step=0,  eps=0.0000001):
+def cosine_similarity_loss(output_net, target_net, targets, typical_mask, atypical_mask, atypical_proportion, alpha, beta, step=0,  eps=0.0000001):
     
     # Normalize each vector by its norm
     output_net_norm = torch.sqrt(torch.sum(output_net ** 2, dim=1, keepdim=True))
@@ -205,7 +209,7 @@ def cosine_similarity_loss(output_net, target_net, targets, typical_mask, atypic
     labels = targets.cpu().numpy()
 
     #typical_similarities = calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypical_proportion, target_similarity, model_similarity, step)
-    typical_similarities, typical_loss, atypical_loss = calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypical_proportion, target_similarity, model_similarity)
+    typical_similarities, typical_loss, atypical_loss = calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypical_proportion, target_similarity, model_similarity, alpha, beta)
 
     loss = torch.mean(target_similarity * torch.log((target_similarity + eps) / (model_similarity + eps)) * typical_similarities)
     #return loss
@@ -244,7 +248,7 @@ def supervised_loss(output_net, targets, eps=0.0000001):
 
 	return loss
 
-def calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypical_proportion, target_similarity, model_similarity, step=0, eps=0.0000001):
+def calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypical_proportion, target_similarity, model_similarity, alpha, beta, step=0, eps=0.0000001):
 	intra_similarities = {}
 	inter_similarities = {}
 
@@ -265,7 +269,7 @@ def calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypi
 	inter_sorted = dict(sorted(inter_similarities.items(), key = lambda values:values[1], reverse = True))
 	# choose the atypical similarities size
 	atypical_size_intra = round(atypical_proportion * len(intra_similarities))
-	atypical_size_inter = round(atypical_proportion * len(inter_similarities))
+	#atypical_size_inter = round(atypical_proportion * len(inter_similarities))
 	atypical_size_inter = round((atypical_proportion * ((cosine_similarity.shape[0]**2)/2 + (cosine_similarity.shape[0]/2))) - atypical_size_intra)
 	
 	# choose atypical pairs
@@ -280,19 +284,50 @@ def calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypi
 
 
 	# 1st method
-	atypical = atypical_intra + atypical_inter
-	#   atypical_loss = 0
-	for coordinates in atypical:
+#	atypical = atypical_intra + atypical_inter
+#	#   atypical_loss = 0
+#	for coordinates in atypical:
+#		x, y = coordinates.split(' ')
+#		typical_similarities[int(x)][int(y)] = atypical_mask # atypical_mask
+#		# comment out if not to shape a symmetric mask matrix
+#		typical_similarities[int(y)][int(x)] = atypical_mask
+#
+#		typical_loss_matrix[int(x)][int(y)] = 0
+#		typical_loss_matrix[int(y)][int(x)] = 0
+#		atypical_loss_matrix[int(x)][int(y)] = 1 # S.O.S.
+#		atypical_loss_matrix[int(y)][int(x)] = 1
+	#ADDED
+	for coordinates in atypical_intra:
 		x, y = coordinates.split(' ')
-		typical_similarities[int(x)][int(y)] = atypical_mask # atypical_mask
+		typical_similarities[int(x)][int(y)] = atypical_mask * alpha # atypical_mask
 		# comment out if not to shape a symmetric mask matrix
-		typical_similarities[int(y)][int(x)] = atypical_mask
+		typical_similarities[int(y)][int(x)] = atypical_mask * alpha
 
 		typical_loss_matrix[int(x)][int(y)] = 0
 		typical_loss_matrix[int(y)][int(x)] = 0
-		atypical_loss_matrix[int(x)][int(y)] = 1 # S.O.S.
+		atypical_loss_matrix[int(x)][int(y)] = 1
 		atypical_loss_matrix[int(y)][int(x)] = 1
-		
+	for coordinates in atypical_inter:
+		x, y = coordinates.split(' ')
+		typical_similarities[int(x)][int(y)] = atypical_mask * beta # atypical_mask
+		# comment out if not to shape a symmetric mask matrix
+		typical_similarities[int(y)][int(x)] = atypical_mask * beta
+
+		typical_loss_matrix[int(x)][int(y)] = 0
+		typical_loss_matrix[int(y)][int(x)] = 0
+		atypical_loss_matrix[int(x)][int(y)] = 1
+		atypical_loss_matrix[int(y)][int(x)] = 1
+	typical_intra = list(intra_sorted.keys())[-(len(intra_sorted)-atypical_size_intra):]
+	typical_inter = list(inter_sorted.keys())[-(len(inter_sorted)-atypical_size_inter):]
+	for coordinates in typical_intra:
+		x, y = coordinates.split(' ')
+		typical_similarities[int(x)][int(y)] *= alpha
+		typical_similarities[int(y)][int(x)] *= alpha
+
+	for coordinates in typical_inter:
+		x, y = coordinates.split(' ')
+		typical_similarities[int(x)][int(y)] *= beta
+		typical_similarities[int(y)][int(x)] *= beta
 
 
 	# 2nd method 
@@ -363,7 +398,8 @@ def calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypi
 	
 	
 	normalized_mask = torch.mul(typical_similarities, (cosine_similarity.shape[0]**2) / torch.sum(typical_similarities))
-	
+
+
 	#return normalized_mask
 	return normalized_mask, typical_loss, atypical_loss
 

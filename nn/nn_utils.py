@@ -25,7 +25,7 @@ def load_model(net, input_file='model.state'):
     net.load_state_dict(state_dict)
 
 
-def train_model(net, optimizer, criterion, train_loader, epochs=10):
+#def train_model(net, optimizer, criterion, train_loader, epochs=10):
     """
     Trains a pytorch model
     :param net:
@@ -35,27 +35,32 @@ def train_model(net, optimizer, criterion, train_loader, epochs=10):
     :param epochs:
     :return:
     """
-    for epoch in range(epochs):
-        net.train()
+    #weight_decay = 0.0001
+#    for epoch in range(epochs):
+#        net.train()
 
-        train_loss, correct, total = 0, 0, 0
-        for (inputs, targets) in tqdm(train_loader):
-            inputs, targets = inputs.cuda(), targets.cuda()
+#        train_loss, correct, total = 0, 0, 0
+#        for (inputs, targets) in tqdm(train_loader):
+#            inputs, targets = inputs.cuda(), targets.cuda()
 
-            optimizer.zero_grad()
-            inputs, targets = Variable(inputs), Variable(targets)
-            outputs = net(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
+#            optimizer.zero_grad()
+#            inputs, targets = Variable(inputs), Variable(targets)
+            #with torch.no_grad():
+#            outputs = net(inputs)
+#            loss = criterion(outputs, targets)
+            #for param in net.parameters():
+            #	loss += weight_decay * torch.norm(param)
+            #loss.requires_grad = True
+#            loss.backward()
+#            optimizer.step()
 
             # Calculate statistics
-            train_loss += loss.data.item()
-            _, predicted = torch.max(outputs.data, 1)
-            total += targets.size(0)
-            correct += predicted.eq(targets.data).cpu().sum()
+#            train_loss += loss.data.item()
+#            _, predicted = torch.max(outputs.data, 1)
+#            total += targets.size(0)
+#            correct += predicted.eq(targets.data).cpu().sum()
 
-        print("\nLoss, acc = ", train_loss, correct / total)
+#        print("\nLoss, acc = ", train_loss, correct / total)
 
 
 def get_labels(test_loader):
@@ -64,7 +69,7 @@ def get_labels(test_loader):
     :return:
     """
     labels = []
-    for (inputs, targets) in tqdm(test_loader):
+    for (inputs, _, targets) in tqdm(test_loader): #inputs, targets
         labels.append(targets.numpy())
 
     return np.concatenate(labels).reshape((-1,))
@@ -80,11 +85,11 @@ def extract_features(net, test_loader):
     net.eval()
 
     features = []
-    for (inputs, targets) in tqdm(test_loader):
+    for (inputs, _, targets) in tqdm(test_loader): #inputs, targets
         inputs = inputs.cuda()
         inputs = Variable(inputs, volatile=True)
-
-        outputs = net.get_features(inputs)
+        with torch.no_grad():
+        	outputs = net.get_features(inputs)
         outputs = outputs.cpu()
         features.append(outputs.data.numpy())
 
@@ -99,3 +104,42 @@ def get_raw_features(test_loader):
     for (inputs, targets) in tqdm(test_loader):
         features.append(np.float16(inputs.numpy()))
     return np.concatenate(features)
+    
+    
+def train_model(net, optimizer, criterion, train_loader, epochs=10):
+    """
+    Trains a pytorch model
+    :param net:
+    :param optimizer:
+    :param criterion:
+    :param train_loader:
+    :param epochs:
+    :return:
+    """
+
+    for epoch in range(epochs):
+        net.train()
+
+        train_loss, correct, total = 0, 0, 0
+        for (inputs, _, targets) in tqdm(train_loader): # inputs, targets
+            inputs, targets = inputs.cuda(), targets.cuda()
+
+            optimizer.zero_grad()
+            inputs, targets = Variable(inputs), Variable(targets)
+            #with torch.no_grad():
+            outputs = net(inputs)
+            targets = targets.squeeze() # comment out
+            loss = criterion(outputs, targets)
+            #for param in net.parameters():
+            #	loss += weight_decay * torch.norm(param)
+            #loss.requires_grad = True
+            loss.backward()
+            optimizer.step()
+
+            # Calculate statistics
+            train_loss += loss.data.item()
+            _, predicted = torch.max(outputs.data, 1)
+            total += targets.size(0)
+            correct += predicted.eq(targets.data).cpu().sum()
+
+        print("\nLoss, acc = ", train_loss, correct / total)

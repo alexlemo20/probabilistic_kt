@@ -91,7 +91,6 @@ class Database(object):
             relevant_vectors = self.get_binary_relevances(cur_queries, cur_targets)
             (c_m_ap, c_raw_precision, c_fine_precision, self.fine_recall_levels,) = \
                 self.get_metrics(relevant_vectors, cur_targets)
-
             if m_ap is None:
                 m_ap = c_m_ap * batch_size
                 fine_precision = c_fine_precision * batch_size
@@ -151,7 +150,7 @@ def retrieval_evaluation(net, train_loader, test_loader, metric='cosine', raw=Fa
     # Evaluate the model
     database = Database(train_features, train_labels, metric=metric)
     a = time()
-    results = database.evaluate(test_features, test_labels, batch_size=128)
+    results = database.evaluate(test_features, test_labels, batch_size=128) #128
     retrieval_time = (time() - a) / float(len(test_labels))
 
     results['retrieval_time'] = retrieval_time
@@ -175,8 +174,11 @@ def evaluate_model_retrieval(path='', net=None, result_path='', dataset_name='ci
         net.cuda()
         load_model(net, path)
 
-    _, test_loader, train_loader = dataset_loader(batch_size=128)
+
+    _, test_loader, train_loader = dataset_loader(batch_size=128) #128
     results = retrieval_evaluation(net, train_loader, test_loader)
+
+    
 
     results = {dataset_name: results}
     with open(result_path, 'wb') as f:

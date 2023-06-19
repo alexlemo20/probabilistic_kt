@@ -1,8 +1,13 @@
+import sys
+sys.path.append("/media/data/alexlemo/probabilistic_kt")
 from exp_yf.yt_dataset import get_yt_loaders
 from nn.retrieval_evaluation import retrieval_evaluation
 import pickle
 
-def evaluate_baseline(n_repeats=5):
+import torch.multiprocessing as mp
+mp.set_sharing_strategy('file_system')
+
+def evaluate_baseline(n_repeats=1):
 
     results = []
     for i in range(n_repeats):

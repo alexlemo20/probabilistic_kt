@@ -17,14 +17,20 @@ def perform_transfer_knowledge(net, donor_net, transfer_loader, output_path, tra
     # Move the models into GPU
     net.cuda()
     donor_net.cuda()
-    typical_mask = 1
-    atypical_mask = 1
-    typical_target = 1
-    atypical_target = 1
-    atypical_proportion = 0
+    typ_atyp_ratio = 2
+    target_typ_atyp_ratio = 1
+    step_ratio = (target_typ_atyp_ratio - typ_atyp_ratio)/iters[0]
 
-    typical_step = (typical_target - typical_mask) / iters[0]
-    atypical_step = (atypical_target - atypical_mask) / iters[0]
+    #typical_mask = 2 
+    #atypical_mask = 1
+    #typical_target = 1
+    #atypical_target = 2 
+    atypical_proportion = 0.2
+    alpha = 1 # hyper-parameter for weighting TCKD
+    beta = 0.5 #hyper-parameter for weighting NTCKD
+
+    #typical_step = (typical_target - typical_mask) / iters[0]
+    #atypical_step = (atypical_target - atypical_mask) / iters[0]
     
     # Perform the transfer
     W = None
@@ -36,7 +42,8 @@ def perform_transfer_knowledge(net, donor_net, transfer_loader, output_path, tra
         #elif transfer_method == 'distill':
         #    unsupervised_distillation(net, donor_net, transfer_loader, epochs=iters, lr=lr, T=distill_temp)
         if transfer_method == 'pkt':
-            knowledge_transfer(net, donor_net, transfer_loader, epochs=iters, lr=lr, typical_mask=typical_mask, typical_step=typical_step, atypical_mask=atypical_mask, atypical_step=atypical_step, atypical_proportion=atypical_proportion)
+            #knowledge_transfer(net, donor_net, transfer_loader, epochs=iters, lr=lr, typical_mask=typical_mask, typical_step=typical_step, atypical_mask=atypical_mask, atypical_step=atypical_step, atypical_proportion=atypical_proportion, alpha=alpha, beta=beta)
+            knowledge_transfer(net, donor_net, transfer_loader, epochs=iters, lr=lr, typ_atyp_ratio=typ_atyp_ratio, step_ratio=step_ratio, atypical_proportion=atypical_proportion, alpha=alpha, beta=beta)
             #knowledge_transfer(net, donor_net, transfer_loader, epochs=iters, lr=lr)
 
         else:
@@ -91,7 +98,7 @@ def evaluate_kt_methods(net_creator, donor_creator, donor_path, transfer_loader,
     output_path = 'models/' + net_name + '_' + donor_name + '_kt_' + transfer_name + '.model'
     results_path = 'results/' + net_name + '_' + donor_name + '_kt_' + transfer_name + '.pickle'
     perform_transfer_knowledge(net, donor_net, transfer_loader=train_loader, transfer_method='pkt',
-                               output_path=output_path, iters=[iters], learning_rates=[0.0001])
+                               output_path=output_path, iters=[iters], learning_rates=[0.0001]) # COMMENT OUT
     evaluate_model_retrieval(net=Cifar_Tiny(num_classes=100), path=output_path, result_path=results_path, dataset_name='cifar100', dataset_loader=cifar100_loader)
 
 
@@ -111,8 +118,8 @@ def evaluate_kt_methods(net_creator, donor_creator, donor_path, transfer_loader,
     #evaluate_model_retrieval(net=Cifar_Tiny(num_classes=10), path=output_path, result_path=results_path)
 
 if __name__ == '__main__':
-    evaluate_kt_methods(lambda: Cifar_Tiny(100), lambda: ResNet18(num_classes=100), 'models/resnet18_cifar100.model',
-                        cifar100_loader, batch_size=128, donor_name='resnet18_cifar100', transfer_name='cifar100',
+    evaluate_kt_methods(lambda: Cifar_Tiny(num_classes=100), lambda: ResNet18(num_classes=100), 'models/resnet18_cifar100.model',
+                        cifar10_loader, batch_size=64, donor_name='resnet18_cifar100', transfer_name='cifar100',
                         iters=20, net_name='cifar_tiny', init_model_path='models/tiny_cifar100.model')
 
 

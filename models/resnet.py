@@ -52,9 +52,10 @@ class PreActBlock(nn.Module):
         super(PreActBlock, self).__init__()
         self.bn1 = nn.BatchNorm2d(in_planes)
         self.conv1 = conv3x3(in_planes, planes, stride)
+        #self.dropout1 = nn.Dropout2d(0.2)
         self.bn2 = nn.BatchNorm2d(planes)
         self.conv2 = conv3x3(planes, planes)
-
+        #self.dropout2 = nn.Dropout2d(0.2)
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion*planes:
             self.shortcut = nn.Sequential(
@@ -64,8 +65,10 @@ class PreActBlock(nn.Module):
     def forward(self, x):
         out = F.relu(self.bn1(x))
         shortcut = self.shortcut(out)
+        #out = self.dropout1(self.conv1(out))
         out = self.conv1(out)
         out = self.conv2(F.relu(self.bn2(out)))
+        #out = self.dropout2(out)
         out += shortcut
         return out
 
@@ -173,16 +176,16 @@ class ResNet(nn.Module):
 def ResNet18(num_classes=10):
     return ResNet(PreActBlock, [2,2,2,2], num_classes=num_classes)
 
-def ResNet34():
-    return ResNet(BasicBlock, [3,4,6,3])
+def ResNet34(num_classes=10):
+    return ResNet(BasicBlock, [3,4,6,3], num_classes=num_classes)
 
-def ResNet50():
-    return ResNet(Bottleneck, [3,4,6,3])
+def ResNet50(num_classes=10):
+    return ResNet(PreActBlock, [3,4,6,3], num_classes=num_classes) # Bottleneck
 
-def ResNet101():
-    return ResNet(Bottleneck, [3,4,23,3])
+def ResNet101(num_classes=10):
+    return ResNet(Bottleneck, [3,4,23,3], num_classes=num_classes)
 
-def ResNet152():
-    return ResNet(Bottleneck, [3,8,36,3])
+def ResNet152(num_classes=10):
+    return ResNet(Bottleneck, [3,8,36,3], num_classes=num_classes)
 
 
