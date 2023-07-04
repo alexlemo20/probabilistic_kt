@@ -7,7 +7,7 @@ import pickle
 import torch.multiprocessing as mp
 mp.set_sharing_strategy('file_system')
 
-def evaluate_baseline(n_repeats=1):
+def evaluate_baseline(n_repeats=5):
 
     results = []
     for i in range(n_repeats):

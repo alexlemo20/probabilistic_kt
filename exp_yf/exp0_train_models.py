@@ -6,22 +6,21 @@ import os
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 os.environ['TORCH_USE_CUDA_DSA'] = '1'
 
+from tensorflow import keras
+from torchsummary import summary
+
 import torch.nn as nn
 import torch.optim as optim
 from nn.retrieval_evaluation import evaluate_model_retrieval
-from nn.nn_utils import train_model, save_model
+from nn.nn_utils import train_model, save_model, load_model
 
 from models.yt import YT_Small, FaceNet
 from exp_yf.yt_dataset import get_yt_loaders
 from tqdm import tqdm
 
-import torch
-torch.cuda.empty_cache()
-
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
-#torch.backends.cudnn.benchmark = True
-#torch.backends.cudnn.enabled = False
+
 
 def train_yf_model(net, learning_rates=[0.001, 0.0001], iters=[50, 50], output_path='facenet_yf.model'):
     """
@@ -59,7 +58,7 @@ def train_yf_models():
     train_yf_model(net, learning_rates=[0.001, 0.0001], iters=[50, 50],
                         output_path='models/small_yf.model')
 
-    # FaceNet
+    # FaceNet training
     net = FaceNet(num_classes=533)
     net.cuda()
     train_yf_model(net, learning_rates=[0.001, 0.0001], iters=[50, 50],
@@ -76,13 +75,28 @@ def evaluate_yf_models_retrieval():
     evaluate_model_retrieval(net=FaceNet(533), path='models/facenet_yf.model',
                    result_path='results/facenet_yf_baseline.pickle', dataset_name='yf', dataset_loader=get_yt_loaders)
 
+def print_model_summary(model, path):
+    model.cuda()
+    load_model(model, path)
+    summary(model, input_size=(3,64,64))
 
 
 if __name__ == '__main__':
     # Training the teacher model takes approximately a day, so you can use the pretrained model
-    #train_yf_models()
+    train_yf_models()
 
     evaluate_yf_models_retrieval()
+    
+    # print models summary 
+    net=YT_Small(num_classes=533)
+    path='models/small_yf.model'
+    print_model_summary(net, path)
+    net=FaceNet(num_classes=533)
+    path='models/facenet_yf.model'
+    print_model_summary(net,path)
+
+
+
 
 
 
