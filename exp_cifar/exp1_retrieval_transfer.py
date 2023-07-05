@@ -12,7 +12,7 @@ from nn.hint_transfer import unsupervised_hint_transfer, unsupervised_hint_trans
 from nn.retrieval_evaluation import evaluate_model_retrieval
 
 
-def perform_transfer_knowledge(net, donor_net, transfer_loader, output_path, transfer_method, typ_atyp_ratio, target_typ_atyp_ratio, T, step_ratio, atypical_proportion, alpha, beta, method  distill_temp=2, learning_rates=(0.0001, 0.0001), iters=(1, 1), database_loader=None, test_loader=None,):
+def perform_transfer_knowledge(net, donor_net, transfer_loader, output_path, transfer_method, typ_atyp_ratio=1, target_typ_atyp_ratio=1, T=1, step_ratio=0, atypical_proportion=0, alpha=1, beta=1, method='TAII',  distill_temp=2, learning_rates=(0.0001, 0.0001), iters=(1, 1), database_loader=None, test_loader=None):
     # Move the models into GPU
     net.cuda()
     donor_net.cuda()
@@ -38,6 +38,7 @@ def perform_transfer_knowledge(net, donor_net, transfer_loader, output_path, tra
 def evaluate_kt_methods(net_creator, donor_creator, donor_path, transfer_loader, batch_size=128,
                         donor_name='very_small_cifar10', net_name='tiny_cifar', transfer_name='cifar10',
                         iters=100, init_model_path=None, typ_atyp_ratio=1, target_typ_atyp_ratio=1, T=100, step_ratio=0, atypical_proportion=0, alpha=1, beta=1, method='TAII'):
+
     # Method 1: HINT transfer
     net = net_creator()
     if init_model_path is not None:
@@ -80,18 +81,18 @@ def evaluate_kt_methods(net_creator, donor_creator, donor_path, transfer_loader,
     output_path = 'models/' + net_name + '_' + donor_name + '_kt_' + transfer_name + '.model'
     results_path = 'results/' + net_name + '_' + donor_name + '_kt_' + transfer_name + '.pickle'
     perform_transfer_knowledge(net, donor_net, transfer_loader=train_loader, transfer_method='pkt',
-                               output_path=output_path, iters=[iters], learning_rates=[0.0001], database_loader=train_loader_raw, test_loader=test_loader)
+                               output_path=output_path, iters=[iters], learning_rates=[0.0001], database_loader=train_loader_raw, test_loader=test_loader, typ_atyp_ratio=typ_atyp_ratio, target_typ_atyp_ratio=target_typ_atyp_ratio, T=T, step_ratio=step_ratio, atypical_proportion=atypical_proportion, alpha=alpha, beta=beta, method=method)
     # CIFAR10
-    evaluate_model_retrieval(net=Cifar_Tiny(num_classes=10), path=output_path, result_path=results_path, dataset_name='cifar10', dataset_loader=cifar10_loader, typ_atyp_ratio=typ_atyp_ratio, target_typ_atyp_ratio=target_typ_atyp_ratio, T=T, step_ratio=step_ratio, atypical_proportion=atypical_proportion, alpha=alpha, beta=beta, method=method)
+    evaluate_model_retrieval(net=Cifar_Tiny(num_classes=10), path=output_path, result_path=results_path, dataset_name='cifar10', dataset_loader=cifar10_loader)
     # CIFAR100
-    #evaluate_model_retrieval(net=ResNet9(num_classes=100), path=output_path, result_path=results_path, dataset_name='cifar100', dataset_loader=cifar100_loader, typ_atyp_ratio=typ_atyp_ratio, target_typ_atyp_ratio=target_typ_atyp_ratio, T=T, step_ratio=step_ratio, atypical_proportion=atypical_proportion, alpha=alpha, beta=beta, method=method)
+    #evaluate_model_retrieval(net=ResNet9(num_classes=100), path=output_path, result_path=results_path, dataset_name='cifar100', dataset_loader=cifar100_loader)
     
 
 
     # Method 4: HINT (optimized) transfer
     net = net_creator()
     if init_model_path is not None:
-        load_model(net, init_model_path)
+    #    load_model(net, init_model_path)
 
     donor_net = donor_creator()
     load_model(donor_net, donor_path)
@@ -106,8 +107,8 @@ def evaluate_kt_methods(net_creator, donor_creator, donor_path, transfer_loader,
 if __name__ == '__main__':
     
     # set the hyperparameters for TAII, FW, AAFW
-    typ_atyp_ratio = 0.5
-    target_typ_atyp_ratio = 0.5
+    typ_atyp_ratio = 1
+    target_typ_atyp_ratio = 1
     T = 20
     step_ratio = (target_typ_atyp_ratio - typ_atyp_ratio)/T
     atypical_proportion = 0.2
@@ -123,7 +124,7 @@ if __name__ == '__main__':
     # CIFAR 100
     #evaluate_kt_methods(lambda: ResNet9(num_classes=100), lambda: ResNet18(num_classes=100), 'models/resnet18_cifar100.model',
     #                    cifar100_loader, batch_size=128, donor_name='resnet18_cifar100', transfer_name='cifar100',
-    #                    iters=20, net_name='resnet9_cifar100', init_model_path='models/resnet9_cifar100.model', typ_atyp_ratio, target_typ_atyp_ratio, T, step_ratio, atypical_proportion, alpha, beta, method) 
+    #                    iters=20, net_name='resnet9_cifar100', init_model_path='models/resnet9_cifar100.model', typ_atyp_ratio=typ_atyp_ratio, target_typ_atyp_ratio=target_typ_atyp_ratio, T=T, step_ratio=step_ratio, atypical_proportion=atypical_proportion, alpha=alpha, beta=beta, method=method) 
                         
                         
                         

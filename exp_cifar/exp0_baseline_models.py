@@ -93,7 +93,7 @@ def evaluate_cifar_models_retrieval():
     Evaluates the baselines teacher/students
     :return:
     """
-    # evaluate CIFAR 10 models
+    # evaluate CIFAR10 models
     evaluate_model_retrieval(net=Cifar_Tiny(num_classes=10), path='models/tiny_cifar10.model',
                              result_path='results/tiny_cifar10_baseline.pickle')                          
     

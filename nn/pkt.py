@@ -232,10 +232,11 @@ def calculate_mask(cosine_similarity, labels, typical_mask, atypical_mask, atypi
 		typical_similarities, typical_loss_matrix, atypical_loss_matrix = calculate_similarities(cosine_similarity, intra_sorted, inter_sorted, atypical_size_intra, atypical_size_inter, typical_mask, atypical_mask, alpha, beta)
 	elif method == 'FW' :
 		#2nd method
+		#print("\n 2ND METHOD \n")
 		typical_similarities, typical_loss_matrix, atypical_loss_matrix = caluclate_focal_similarities(cosine_similarity, intra_sorted, inter_sorted, atypical_size_intra, atypical_size_inter, typical_mask, atypical_mask, alpha, beta)
 	elif method == 'AAFW' :
 		#3rd method
-		typical_similarities = calculate_focal_auto_adjusted_similarities(cosine_similarity, intra_sorted, inter_sorted, step, alpha, beta)
+		typical_similarities, typical_loss_matrix, atypical_loss_matrix = calculate_focal_auto_adjusted_similarities(cosine_similarity, intra_sorted, inter_sorted, step, alpha, beta)
 	
 	# Calculate typical and atypical loss
 	typical_loss =  torch.mean(target_similarity * torch.log((target_similarity + eps) / (model_similarity + eps)) * typical_loss_matrix)
@@ -362,7 +363,7 @@ def calculate_focal_auto_adjusted_similarities(cosine_similarity, intra_sorted, 
 		typical_similarities[int(x)][int(y)] = ((abs(((max_inter - inter_sorted[coordinates]) / max_dis_inter) - step) / 2) + 0.5) * beta
 		typical_similarities[int(y)][int(x)] = ((abs(((max_inter - inter_sorted[coordinates]) / max_dis_inter) - step) / 2) + 0.5) * beta
 	
-	return typical_similarities
+	return typical_similarities, 0, 0 # No typical-atypical dicrimination
 	
 	
 def show_results(typical_losses, atypical_losses, overall_losses, precisions, epochs):

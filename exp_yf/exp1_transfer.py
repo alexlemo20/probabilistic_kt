@@ -3,7 +3,6 @@ sys.path.append("/media/data/alexlemo/probabilistic_kt")
 
 import torch
 torch.multiprocessing.set_sharing_strategy('file_system')
-torch.cuda.empty_cache()
 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.enabled = False
@@ -57,9 +56,9 @@ if __name__ == '__main__':
 
 
     # set the hyperparameters for TAII, FW and AAFW
-    typ_atyp_ratio = 0.5
+    typ_atyp_ratio = 1
     target_typ_atyp_ratio = 1
-    T=5
+    T=20
     step_ratio = (target_typ_atyp_ratio - typ_atyp_ratio)/ T
     atypical_proportion = 0.2
     alpha = 1 # hyper-parameter for weighting TCKD
@@ -67,7 +66,7 @@ if __name__ == '__main__':
     method='TAII'
     perform_kt_transfer('hint')
     perform_kt_transfer('kt_handcrafted')
-    perform_kt_transfer('kt', typ_atyp_ratio, target_typ_atyp_ratio, T, step_ratio, atypical_proportion, alpha, beta, method)
+    perform_kt_transfer('kt', epochs=20, typ_atyp_ratio=typ_atyp_ratio, target_typ_atyp_ratio=target_typ_atyp_ratio, T=T, step_ratio=step_ratio, atypical_proportion=atypical_proportion, alpha=alpha, beta=beta, method=method)
     perform_kt_transfer('kt_supervised')
 
     ## Additional experiments
